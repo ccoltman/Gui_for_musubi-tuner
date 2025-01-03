@@ -178,11 +178,14 @@ def run_training(
     blocks_to_swap: int,
     output_dir: str,
     output_name: str,
-    save_every_n_epochs: int
+    save_every_n_epochs: int,
+    use_network_weights: bool,
+    network_weights_path: str
 ) -> Generator[str, None, None]:
     """
     训练命令同样使用 accumulated 追加方式，并可被中止。
     """
+    # 确定最终的 dataset_config 路径
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
 
     python_executable = "./python_embeded/python.exe"
@@ -218,6 +221,10 @@ def run_training(
 
     if enable_low_vram:
         command.extend(["--blocks_to_swap", str(blocks_to_swap)])
+    
+    # 如果用户选择使用已有权重，添加 --network_weights 参数
+    if use_network_weights and network_weights_path.strip():
+        command.extend(["--network_weights", network_weights_path.strip()])
 
     def run_and_stream_output(cmd):
         accumulated = ""
@@ -303,46 +310,45 @@ def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, 
         accumulated += msg
         yield accumulated
 
-
 #########################
 # 构建 Gradio UI
 #########################
 with gr.Blocks() as demo:
-    gr.Markdown("# AI Software Musubi Tuner Gui - Code from Kohya, Gui by TTP")
+    gr.Markdown("# AI Software Musubi Tuner Gui code by Kohya Gui by TTP - 双语支持 (中/英)")
 
     ########################################
     # (1) Pre-caching 页面
     ########################################
-    with gr.Tab("Pre-caching"):
-        gr.Markdown("## Latent 和 Text Encoder 输出预缓存")
+    with gr.Tab("Pre-caching / 预缓存"):
+        gr.Markdown("## Latent 和 Text Encoder 输出预缓存（仅选择路径，不上传文件） / Latent and Text Encoder Pre-caching (Path Selection Only)")
 
         with gr.Row():
             dataset_config_file_cache = gr.File(
-                label="浏览选择 dataset_config (toml)",
+                label="浏览选择 dataset_config (toml, 仅获取路径) / Browse dataset_config (toml, Path Only)",
                 file_count="single",
                 file_types=[".toml"],
                 type="filepath",  # 仅返回本地路径
             )
             dataset_config_text_cache = gr.Textbox(
-                label="或手动输入 toml 路径",
+                label="或手动输入 toml 路径 / Or Enter toml Path Manually",
                 placeholder="K:/ai_software/musubi-tuner/train/test/test.toml"
             )
 
         enable_low_memory = gr.Checkbox(
-            label="启用低显存模式",
+            label="启用低显存模式 (增加相关参数) / Enable Low VRAM Mode (Additional Parameters)",
             value=False
         )
         skip_existing = gr.Checkbox(
-            label="是否跳过已存在的 Cache 文件 (--skip_existing)",
+            label="是否跳过已存在的 Cache 文件 (--skip_existing) / Skip Existing Cache Files (--skip_existing)",
             value=False
         )
 
         with gr.Row():
-            run_cache_button = gr.Button("运行预缓存")
-            stop_cache_button = gr.Button("停止预缓存")
+            run_cache_button = gr.Button("运行预缓存 / Run Pre-caching")
+            stop_cache_button = gr.Button("停止预缓存 / Stop Pre-caching")
 
         cache_output = gr.Textbox(
-            label="预缓存输出",
+            label="预缓存输出（累加显示） / Pre-caching Output (Accumulated)",
             lines=20,
             interactive=False
         )
@@ -362,57 +368,57 @@ with gr.Blocks() as demo:
     ########################################
     # (2) Training 页面
     ########################################
-    with gr.Tab("Training"):
-        gr.Markdown("## HV 训练网络")
+    with gr.Tab("Training / 训练"):
+        gr.Markdown("## HV 训练网络（仅选择路径，不上传文件） / HV Training Network (Path Selection Only)")
 
         with gr.Row():
             dataset_config_file_train = gr.File(
-                label="浏览选择 dataset_config (toml)",
+                label="浏览选择 dataset_config (toml, 仅获取路径) / Browse dataset_config (toml, Path Only)",
                 file_count="single",
                 file_types=[".toml"],
                 type="filepath",  # 仅返回本地路径
             )
             dataset_config_text_train = gr.Textbox(
-                label="或手动输入 toml 路径",
+                label="或手动输入 toml 路径 / Or Enter toml Path Manually",
                 placeholder="K:/ai_software/musubi-tuner/train/test/test.toml"
             )
 
         with gr.Row():
             max_train_epochs = gr.Number(
-                label="训练 Epoch 数量 (>=2)",
+                label="训练 Epoch 数量 (>=2) / Number of Training Epochs (>=2)",
                 value=16,
                 precision=0
             )
             learning_rate = gr.Textbox(
-                label="学习率 (如 1e-4)",
+                label="学习率 (如 1e-4) / Learning Rate (e.g., 1e-4)",
                 value="1e-4"
             )
 
         with gr.Row():
             network_dim = gr.Number(
-                label="训练的Dim (2-128)",
+                label="训练的Dim (2-128) / Training Dim (2-128)",
                 value=32,
                 precision=0
             )
             network_alpha = gr.Number(
-                label="训练的Alpha (1-128)",
+                label="训练的Alpha (1-128) / Training Alpha (1-128)",
                 value=16,
                 precision=0
             )
 
         with gr.Row():
             gradient_accumulation_steps = gr.Number(
-                label="梯度累积步数 (建议双数)",
+                label="梯度累积步数 (建议双数) / Gradient Accumulation Steps (Even Number Recommended)",
                 value=1,
                 precision=0
             )
             enable_low_vram = gr.Checkbox(
-                label="启用低 VRAM 模式",
+                label="启用低 VRAM 模式 / Enable Low VRAM Mode",
                 value=False
             )
 
         blocks_to_swap = gr.Number(
-            label="Blocks to Swap (20-36, 双数)",
+            label="Blocks to Swap (20-36, 双数) / Blocks to Swap (20-36, Even Number)",
             value=20,
             precision=0,
             visible=False
@@ -429,29 +435,52 @@ with gr.Blocks() as demo:
 
         with gr.Row():
             output_dir_input = gr.Textbox(
-                label="Output Directory",
+                label="Output Directory / 输出目录",
                 value="./output",
                 placeholder="./output"
             )
             output_name_input = gr.Textbox(
-                label="Output Name (e.g., rem_test)",
+                label="Output Name (e.g., rem_test) / 输出名称 (例如 rem_test)",
                 value="lora",
                 placeholder="rem_test"
             )
 
+        # 新增行：save_every_n_epochs
         with gr.Row():
             save_every_n_epochs = gr.Number(
-                label="每多少个 epoch 保存一次 (save_every_n_epochs)",
+                label="每多少个 epoch 保存一次 (save_every_n_epochs) / Save Every N Epochs (save_every_n_epochs)",
                 value=1,
                 precision=0
             )
 
+        # 新增行：使用已有权重
         with gr.Row():
-            run_train_button = gr.Button("运行训练")
-            stop_train_button = gr.Button("停止训练")
+            use_network_weights = gr.Checkbox(
+                label="从已有权重继续训练 (--network_weights) / Continue Training from Existing Weights (--network_weights)",
+                value=False
+            )
+            network_weights_path = gr.Textbox(
+                label="权重文件路径 / Weights File Path",
+                placeholder="path/to/weights_file.safetensors",
+                visible=False
+            )
+
+        # 根据复选框显示权重路径输入
+        def toggle_network_weights_input(checked):
+            return gr.update(visible=checked)
+
+        use_network_weights.change(
+            toggle_network_weights_input,
+            inputs=use_network_weights,
+            outputs=network_weights_path
+        )
+
+        with gr.Row():
+            run_train_button = gr.Button("运行训练 / Run Training")
+            stop_train_button = gr.Button("停止训练 / Stop Training")
 
         train_output = gr.Textbox(
-            label="训练输出",
+            label="训练输出 / Training Output",
             lines=20,
             interactive=False
         )
@@ -470,7 +499,9 @@ with gr.Blocks() as demo:
                 blocks_to_swap,
                 output_dir_input,
                 output_name_input,
-                save_every_n_epochs
+                save_every_n_epochs,
+                use_network_weights,
+                network_weights_path
             ],
             outputs=train_output
         )
@@ -484,24 +515,24 @@ with gr.Blocks() as demo:
     ########################################
     # (3) LoRA Conversion 页面
     ########################################
-    with gr.Tab("LoRA Conversion"):
-        gr.Markdown("## 将 LoRA 转换为其他格式(comfyui)兼容")
+    with gr.Tab("LoRA Conversion / LoRA 转换"):
+        gr.Markdown("## 将 LoRA 转换为其他格式 (target=other) / Convert LoRA to Other Formats (target=other)")
 
         lora_file_input = gr.File(
-            label="选择 Musubi LoRA 文件 (.safetensors)，仅获取路径",
+            label="选择 Musubi LoRA 文件 (.safetensors)，仅获取路径 / Select Musubi LoRA File (.safetensors), Path Only",
             file_count="single",
             file_types=[".safetensors"],
             type="filepath"  # 仅返回本地路径
         )
         output_dir_conversion = gr.Textbox(
-            label="输出目录 (可选)，若不填则默认当前目录",
-            value="./output",
+            label="输出目录 (可选)，若不填则默认当前目录 / Output Directory (Optional, Defaults to Current Directory)",
+            value="",
             placeholder="K:/ai_software/musubi-tuner/converted_output"
         )
 
-        convert_button = gr.Button("Convert LoRA")
+        convert_button = gr.Button("Convert LoRA / 转换 LoRA")
         conversion_output = gr.Textbox(
-            label="转换输出日志",
+            label="转换输出日志 / Conversion Output Logs",
             lines=15,
             interactive=False
         )
@@ -516,9 +547,13 @@ with gr.Blocks() as demo:
     # 注意事项
     ########################################
     gr.Markdown("""
-### 注意事项
-1. **路径格式**：请使用正确路径格式 (Windows可用正斜杠 /，或转义反斜杠 \\)。  
-2. **LoRA Conversion**：输入 `.safetensors` 路径，不上传文件，输出会自动在文件名后加 `_converted.safetensors`。
+### 注意事项 / Notes 
+1. **路径格式 / Path Format**：请使用正确路径格式 (Windows可用正斜杠 /，或转义反斜杠 \\)。  
+2. **依赖项 / Dependencies**：确认嵌入式 Python 环境已安装 `accelerate`, `torch`, `numpy`, `psutil`, `gradio` 等必要库。  
+3. **accelerate 配置 / Accelerate Configuration**：如首次使用，需要先运行 `./python_embeded/python.exe -m accelerate config` 配置。  
+4. **权限问题 / Permission Issues**：在某些操作系统中，需要管理员权限执行命令。  
+5. **LoRA Conversion**：输入 `.safetensors` 路径，不上传文件，输出会自动在文件名后加 `_converted.safetensors`。  
+6. **训练续训功能 / Training Continuation**：在“Training”标签页中，启用“从已有权重继续训练”后，请确保输入的权重文件路径正确。
     """)
 
 demo.queue()
