@@ -5,6 +5,7 @@ import os
 import signal
 import psutil
 from typing import Generator
+import toml  # 用于保存和加载设置
 
 #########################
 # 1. 全局进程管理
@@ -67,7 +68,37 @@ def stop_training():
         return "[WARN] 当前没有正在进行的训练进程。\n"
 
 #########################
-# 2. 处理输入数据集配置路径 (支持文本或文件)
+# 2. 设置保存与加载
+#########################
+
+SETTINGS_FILE = "settings.toml"
+
+def load_settings() -> dict:
+    """
+    加载 settings.toml 文件中的设置。如果文件不存在，返回空字典。
+    """
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = toml.load(f)
+                return settings
+        except Exception:
+            return {}
+    else:
+        return {}
+
+def save_settings(settings: dict):
+    """
+    将设置保存到 settings.toml 文件中。
+    """
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            toml.dump(settings, f)
+    except Exception as e:
+        print(f"[WARN] 保存 settings.toml 失败: {e}")
+
+#########################
+# 3. 处理输入数据集配置路径 (支持文本或文件)
 #########################
 
 def get_dataset_config(file_path: str, text_path: str) -> str:
@@ -86,7 +117,7 @@ def get_dataset_config(file_path: str, text_path: str) -> str:
         return ""
 
 #########################
-# 3. Pre-caching
+# 4. Pre-caching
 #########################
 
 def run_cache_commands(
@@ -162,8 +193,22 @@ def run_cache_commands(
     accumulated_main += "\n[INFO] 第二段预缓存已完成。\n"
     yield accumulated_main
 
+    # 保存预缓存设置到 settings.toml
+    pre_caching_settings = {
+        "pre_caching": {
+            "dataset_config_file": dataset_config_file,
+            "dataset_config_text": dataset_config_text,
+            "enable_low_memory": enable_low_memory,
+            "skip_existing": skip_existing
+        }
+    }
+    # 读取现有设置，避免覆盖其他部分
+    existing_settings = load_settings()
+    existing_settings.update(pre_caching_settings)
+    save_settings(existing_settings)
+
 #########################
-# 4. Training
+# 5. Training
 #########################
 
 def run_training(
@@ -226,6 +271,30 @@ def run_training(
     if use_network_weights and network_weights_path.strip():
         command.extend(["--network_weights", network_weights_path.strip()])
 
+    # 保存当前训练设置到 settings.toml
+    current_settings = {
+        "training": {
+            "dataset_config_file": dataset_config_file,
+            "dataset_config_text": dataset_config_text,
+            "max_train_epochs": max_train_epochs,
+            "learning_rate": learning_rate,
+            "network_dim": network_dim,
+            "network_alpha": network_alpha,
+            "gradient_accumulation_steps": gradient_accumulation_steps,
+            "enable_low_vram": enable_low_vram,
+            "blocks_to_swap": blocks_to_swap,
+            "output_dir": output_dir,
+            "output_name": output_name,
+            "save_every_n_epochs": save_every_n_epochs,
+            "use_network_weights": use_network_weights,
+            "network_weights_path": network_weights_path
+        }
+    }
+    # 读取现有设置，避免覆盖其他部分
+    existing_settings = load_settings()
+    existing_settings.update(current_settings)
+    save_settings(existing_settings)
+
     def run_and_stream_output(cmd):
         accumulated = ""
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -256,7 +325,7 @@ def run_training(
     yield accumulated_main
 
 #########################
-# 5. LoRA Conversion (第三页)
+# 6. LoRA Conversion (第三页)
 #########################
 
 def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, None, None]:
@@ -311,8 +380,16 @@ def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, 
         yield accumulated
 
 #########################
-# 构建 Gradio UI
+# 7. 构建 Gradio UI
 #########################
+
+# 加载上次的设置
+settings = load_settings()
+
+# 提取 pre_caching 和 training 相关设置
+pre_caching_settings = settings.get("pre_caching", {})
+training_settings = settings.get("training", {})
+
 with gr.Blocks() as demo:
     gr.Markdown("# AI Software Musubi Tuner Gui code by Kohya Gui by TTP - 双语支持 (中/英)")
 
@@ -331,16 +408,17 @@ with gr.Blocks() as demo:
             )
             dataset_config_text_cache = gr.Textbox(
                 label="或手动输入 toml 路径 / Or Enter toml Path Manually",
+                value=pre_caching_settings.get("dataset_config_text", ""),
                 placeholder="K:/ai_software/musubi-tuner/train/test/test.toml"
             )
 
         enable_low_memory = gr.Checkbox(
             label="启用低显存模式 (增加相关参数) / Enable Low VRAM Mode (Additional Parameters)",
-            value=False
+            value=pre_caching_settings.get("enable_low_memory", False)
         )
         skip_existing = gr.Checkbox(
             label="是否跳过已存在的 Cache 文件 (--skip_existing) / Skip Existing Cache Files (--skip_existing)",
-            value=False
+            value=pre_caching_settings.get("skip_existing", False)
         )
 
         with gr.Row():
@@ -380,48 +458,49 @@ with gr.Blocks() as demo:
             )
             dataset_config_text_train = gr.Textbox(
                 label="或手动输入 toml 路径 / Or Enter toml Path Manually",
+                value=training_settings.get("dataset_config_text", ""),
                 placeholder="K:/ai_software/musubi-tuner/train/test/test.toml"
             )
 
         with gr.Row():
             max_train_epochs = gr.Number(
                 label="训练 Epoch 数量 (>=2) / Number of Training Epochs (>=2)",
-                value=16,
+                value=training_settings.get("max_train_epochs", 16),
                 precision=0
             )
             learning_rate = gr.Textbox(
                 label="学习率 (如 1e-4) / Learning Rate (e.g., 1e-4)",
-                value="1e-4"
+                value=training_settings.get("learning_rate", "1e-4")
             )
 
         with gr.Row():
             network_dim = gr.Number(
                 label="训练的Dim (2-128) / Training Dim (2-128)",
-                value=32,
+                value=training_settings.get("network_dim", 32),
                 precision=0
             )
             network_alpha = gr.Number(
                 label="训练的Alpha (1-128) / Training Alpha (1-128)",
-                value=16,
+                value=training_settings.get("network_alpha", 16),
                 precision=0
             )
 
         with gr.Row():
             gradient_accumulation_steps = gr.Number(
                 label="梯度累积步数 (建议双数) / Gradient Accumulation Steps (Even Number Recommended)",
-                value=1,
+                value=training_settings.get("gradient_accumulation_steps", 1),
                 precision=0
             )
             enable_low_vram = gr.Checkbox(
                 label="启用低 VRAM 模式 / Enable Low VRAM Mode",
-                value=False
+                value=training_settings.get("enable_low_vram", False)
             )
 
         blocks_to_swap = gr.Number(
             label="Blocks to Swap (20-36, 双数) / Blocks to Swap (20-36, Even Number)",
-            value=20,
+            value=training_settings.get("blocks_to_swap", 20),
             precision=0,
-            visible=False
+            visible=training_settings.get("enable_low_vram", False)
         )
 
         def toggle_blocks_swap(checked):
@@ -436,12 +515,12 @@ with gr.Blocks() as demo:
         with gr.Row():
             output_dir_input = gr.Textbox(
                 label="Output Directory / 输出目录",
-                value="./output",
+                value=training_settings.get("output_dir", "./output"),
                 placeholder="./output"
             )
             output_name_input = gr.Textbox(
                 label="Output Name (e.g., rem_test) / 输出名称 (例如 rem_test)",
-                value="lora",
+                value=training_settings.get("output_name", "lora"),
                 placeholder="rem_test"
             )
 
@@ -449,7 +528,7 @@ with gr.Blocks() as demo:
         with gr.Row():
             save_every_n_epochs = gr.Number(
                 label="每多少个 epoch 保存一次 (save_every_n_epochs) / Save Every N Epochs (save_every_n_epochs)",
-                value=1,
+                value=training_settings.get("save_every_n_epochs", 1),
                 precision=0
             )
 
@@ -457,12 +536,13 @@ with gr.Blocks() as demo:
         with gr.Row():
             use_network_weights = gr.Checkbox(
                 label="从已有权重继续训练 (--network_weights) / Continue Training from Existing Weights (--network_weights)",
-                value=False
+                value=training_settings.get("use_network_weights", False)
             )
             network_weights_path = gr.Textbox(
                 label="权重文件路径 / Weights File Path",
                 placeholder="path/to/weights_file.safetensors",
-                visible=False
+                value=training_settings.get("network_weights_path", ""),
+                visible=training_settings.get("use_network_weights", False)
             )
 
         # 根据复选框显示权重路径输入
@@ -549,7 +629,7 @@ with gr.Blocks() as demo:
     gr.Markdown("""
 ### 注意事项 / Notes 
 1. **路径格式 / Path Format**：请使用正确路径格式 (Windows可用正斜杠 /，或转义反斜杠 \\)。  
-2. **依赖项 / Dependencies**：确认嵌入式 Python 环境已安装 `accelerate`, `torch`, `numpy`, `psutil`, `gradio` 等必要库。  
+2. **依赖项 / Dependencies**：确认嵌入式 Python 环境已安装 `accelerate`, `torch`, `numpy`, `psutil`, `gradio`, `toml` 等必要库。  
 3. **accelerate 配置 / Accelerate Configuration**：如首次使用，需要先运行 `./python_embeded/python.exe -m accelerate config` 配置。  
 4. **权限问题 / Permission Issues**：在某些操作系统中，需要管理员权限执行命令。  
 5. **LoRA Conversion**：输入 `.safetensors` 路径，不上传文件，输出会自动在文件名后加 `_converted.safetensors`。  
