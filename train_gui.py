@@ -362,7 +362,7 @@ def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, 
     ]
 
     accumulated = ""
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
 
     for line in process.stdout:
         print(line, end="", flush=True)
