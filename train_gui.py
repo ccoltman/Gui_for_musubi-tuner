@@ -208,8 +208,35 @@ def run_cache_commands(
     save_settings(existing_settings)
 
 #########################
-# 5. Training
+# 5. 训练函数 + 生成范例扩展
 #########################
+
+def make_prompt_file(
+    prompt_text: str,
+    w: int,
+    h: int,
+    frames: int,
+    seed: int,
+    steps: int,
+    custom_prompt_txt: bool,
+    custom_prompt_path: str
+) -> str:
+    """
+    根据用户输入，生成 ./prompt_file.txt 或使用用户自定义的 prompt 文件。
+    返回最终的 prompt 文件路径。
+    """
+    if custom_prompt_txt and custom_prompt_path.strip():
+        # 用户自定义 prompt 文件
+        return custom_prompt_path.strip()
+    else:
+        # 自动生成 prompt_file.txt
+        default_prompt_path = "./prompt_file.txt"
+        with open(default_prompt_path, "w", encoding="utf-8") as f:
+            # 写一个例子
+            f.write("# prompt 1: for generating a cat video\n")
+            line = f"{prompt_text} --w {w} --h {h} --f {frames} --d {seed} --s {steps}\n"
+            f.write(line)
+        return default_prompt_path
 
 def run_training(
     dataset_config_file: str,
@@ -225,15 +252,27 @@ def run_training(
     output_name: str,
     save_every_n_epochs: int,
     use_network_weights: bool,
-    network_weights_path: str
+    network_weights_path: str,
+    # 新增参数：是否生成范例
+    generate_samples: bool,
+    sample_every_n_epochs: int,
+    sample_every_n_steps: int,
+    sample_prompt_text: str,
+    sample_w: int,
+    sample_h: int,
+    sample_frames: int,
+    sample_seed: int,
+    sample_steps: int,
+    custom_prompt_txt: bool,
+    custom_prompt_path: str
 ) -> Generator[str, None, None]:
     """
-    训练命令同样使用 accumulated 追加方式，并可被中止。
+    训练回调函数，新增“生成范例”逻辑
     """
-    # 确定最终的 dataset_config 路径
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
 
     python_executable = "./python_embeded/python.exe"
+
     command = [
         python_executable, "-m", "accelerate.commands.launch",
         "--num_cpu_threads_per_process", "1",
@@ -267,11 +306,36 @@ def run_training(
     if enable_low_vram:
         command.extend(["--blocks_to_swap", str(blocks_to_swap)])
     
-    # 如果用户选择使用已有权重，添加 --network_weights 参数
     if use_network_weights and network_weights_path.strip():
         command.extend(["--network_weights", network_weights_path.strip()])
 
-    # 保存当前训练设置到 settings.toml
+    # 如果勾选了“生成范例”，添加对应参数
+    if generate_samples:
+        # 生成 prompt 文件
+        prompt_file_path = make_prompt_file(
+            prompt_text=sample_prompt_text,
+            w=sample_w,
+            h=sample_h,
+            frames=sample_frames,
+            seed=sample_seed,
+            steps=sample_steps,
+            custom_prompt_txt=custom_prompt_txt,
+            custom_prompt_path=custom_prompt_path
+        )
+        # 添加 sample 参数
+        command.extend([
+            "--sample_prompts", prompt_file_path,
+            "--sample_every_n_epochs", str(sample_every_n_epochs),
+            "--sample_every_n_steps", str(sample_every_n_steps),
+            "--sample_at_first",
+            "--vae",  "./models/ckpts/hunyuan-video-t2v-720p/vae/pytorch_model.pt",
+            "--vae_chunk_size",  "32",
+            "--vae_spatial_tile_sample_min_size",  "128",
+            "--text_encoder1",  "./models/ckpts/text_encoder",
+            "--text_encoder2",  "./models/ckpts/text_encoder_2",
+            "--fp8_llm"
+        ])
+
     current_settings = {
         "training": {
             "dataset_config_file": dataset_config_file,
@@ -287,10 +351,21 @@ def run_training(
             "output_name": output_name,
             "save_every_n_epochs": save_every_n_epochs,
             "use_network_weights": use_network_weights,
-            "network_weights_path": network_weights_path
+            "network_weights_path": network_weights_path,
+            # 生成范例相关设置
+            "generate_samples": generate_samples,
+            "sample_every_n_epochs": sample_every_n_epochs,
+            "sample_every_n_steps": sample_every_n_steps,
+            "sample_prompt_text": sample_prompt_text,
+            "sample_w": sample_w,
+            "sample_h": sample_h,
+            "sample_frames": sample_frames,
+            "sample_seed": sample_seed,
+            "sample_steps": sample_steps,
+            "custom_prompt_txt": custom_prompt_txt,
+            "custom_prompt_path": custom_prompt_path
         }
     }
-    # 读取现有设置，避免覆盖其他部分
     existing_settings = load_settings()
     existing_settings.update(current_settings)
     save_settings(existing_settings)
@@ -307,7 +382,6 @@ def run_training(
 
         return_code = process.wait()
         running_processes["train"] = None
-
         if return_code != 0:
             error_msg = f"\n[ERROR] 命令执行失败，返回码: {return_code}\n"
             accumulated += error_msg
@@ -319,7 +393,7 @@ def run_training(
 
     for content in run_and_stream_output(command):
         yield content
-        accumulated_main = content  # 最后一次 content 包含全部日志
+        accumulated_main = content
 
     accumulated_main += "\n[INFO] 训练命令执行完成。\n"
     yield accumulated_main
@@ -362,7 +436,7 @@ def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, 
     ]
 
     accumulated = ""
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     for line in process.stdout:
         print(line, end="", flush=True)
@@ -555,6 +629,89 @@ with gr.Blocks() as demo:
             outputs=network_weights_path
         )
 
+        # 新增：生成范例相关参数
+        generate_samples_checkbox = gr.Checkbox(
+            label="训练时生成范例 (sample_prompts)?",
+            value=training_settings.get("generate_samples", False)
+        )
+        sample_every_n_epochs_input = gr.Number(
+            label="sample_every_n_epochs",
+            value=training_settings.get("sample_every_n_epochs", 1),
+            precision=0,
+            visible=training_settings.get("generate_samples", False)
+        )
+        sample_every_n_steps_input = gr.Number(
+            label="sample_every_n_steps",
+            value=training_settings.get("sample_every_n_steps", 1000),
+            precision=0,
+            visible=training_settings.get("generate_samples", False)
+        )
+        sample_prompt_text_input = gr.Textbox(
+            label="Prompt 文本 / Prompt Text",
+            value=training_settings.get("sample_prompt_text", "A cat walks on the grass, realistic style."),
+            visible=training_settings.get("generate_samples", False)
+        )
+        sample_w_input = gr.Number(label="宽度 (w)", value=training_settings.get("sample_w", 640), precision=0, visible=training_settings.get("generate_samples", False))
+        sample_h_input = gr.Number(label="高度 (h)", value=training_settings.get("sample_h", 480), precision=0, visible=training_settings.get("generate_samples", False))
+        sample_frames_input = gr.Number(label="帧数 (f)", value=training_settings.get("sample_frames", 25), precision=0, visible=training_settings.get("generate_samples", False))
+        sample_seed_input = gr.Number(label="种子 (d)", value=training_settings.get("sample_seed", 123), precision=0, visible=training_settings.get("generate_samples", False))
+        sample_steps_input = gr.Number(label="步数 (s)", value=training_settings.get("sample_steps", 20), precision=0, visible=training_settings.get("generate_samples", False))
+
+        custom_prompt_txt_checkbox = gr.Checkbox(
+            label="使用自定义 prompt_file (txt)？",
+            value=training_settings.get("custom_prompt_txt", False),
+            visible=training_settings.get("generate_samples", False)
+        )
+        custom_prompt_path_input = gr.Textbox(
+            label="自定义 prompt_file 路径",
+            value=training_settings.get("custom_prompt_path", ""),
+            placeholder="K:/my_prompt.txt",
+            visible=training_settings.get("generate_samples", False) and training_settings.get("custom_prompt_txt", False)
+        )
+
+        # 当 generate_samples_checkbox 勾选时，显示 sample 参数
+        def toggle_generate_samples(checked, checked2):
+            updates = []
+            # 使 sample_every_n_epochs_input ... sample_steps_input 全部可见
+            for _ in range(8):
+                updates.append(gr.update(visible=checked))
+            # 同时使 custom_prompt_txt_checkbox 可见
+            updates.append(gr.update(visible=checked))
+            # custom_prompt_path_input 的可见性根据 checked + checked2
+            # 这里先简单设置为 not generate_samples => not visible
+            custom_prompt_visible = checked and checked2
+            updates.append(gr.update(visible=custom_prompt_visible))
+            return updates
+
+        generate_samples_checkbox.change(
+            toggle_generate_samples,
+            inputs=[generate_samples_checkbox, custom_prompt_txt_checkbox],
+            outputs=[
+                sample_every_n_epochs_input,
+                sample_every_n_steps_input,
+                sample_prompt_text_input,
+                sample_w_input,
+                sample_h_input,
+                sample_frames_input,
+                sample_seed_input,
+                sample_steps_input,
+                custom_prompt_txt_checkbox,
+                custom_prompt_path_input
+            ]
+        )
+
+        # 当 custom_prompt_txt_checkbox 勾选时，也需要更新 prompt_path 的可见性
+        def toggle_custom_prompt(checked, generate_checked):
+            # 只有当 generate_samples_checkbox 和 custom_prompt_txt_checkbox 都勾选时，才显示
+            visible = checked and generate_checked
+            return gr.update(visible=visible)
+
+        custom_prompt_txt_checkbox.change(
+            toggle_custom_prompt,
+            inputs=[custom_prompt_txt_checkbox, generate_samples_checkbox],
+            outputs=custom_prompt_path_input
+        )
+
         with gr.Row():
             run_train_button = gr.Button("运行训练 / Run Training")
             stop_train_button = gr.Button("停止训练 / Stop Training")
@@ -581,7 +738,19 @@ with gr.Blocks() as demo:
                 output_name_input,
                 save_every_n_epochs,
                 use_network_weights,
-                network_weights_path
+                network_weights_path,
+                # === 新增的生成范例参数 ===
+                generate_samples_checkbox,
+                sample_every_n_epochs_input,
+                sample_every_n_steps_input,
+                sample_prompt_text_input,
+                sample_w_input,
+                sample_h_input,
+                sample_frames_input,
+                sample_seed_input,
+                sample_steps_input,
+                custom_prompt_txt_checkbox,
+                custom_prompt_path_input
             ],
             outputs=train_output
         )
