@@ -106,7 +106,7 @@ def get_dataset_config(file_path: str, text_path: str) -> str:
 # 4. Pre-caching
 #########################
 
-# Hunyuan 预缓存：toml文件上传，其它文件路径由用户手动输入
+# Hunyuan 预缓存：toml 文件上传，其它模型文件路径由用户手动输入
 def run_cache_commands(
     dataset_config_file: str,
     dataset_config_text: str,
@@ -176,7 +176,7 @@ def run_cache_commands(
     accumulated_main += "\n[INFO] Hunyuan Text Encoder 输出预缓存已完成。\n"
     yield accumulated_main
 
-    # 保存所有预缓存设置
+    # 保存所有 Hunyuan 预缓存设置
     pre_caching_settings = {
         "pre_caching": {
             "dataset_config_file": dataset_config_file,
@@ -194,7 +194,7 @@ def run_cache_commands(
     existing_settings.update(pre_caching_settings)
     save_settings(existing_settings)
 
-# Wan2.1 预缓存
+# Wan2.1 预缓存：toml 文件上传，其它模型文件路径由用户手动输入
 def run_wan_cache_commands(
     dataset_config_file: str,
     dataset_config_text: str,
@@ -258,7 +258,8 @@ def run_wan_cache_commands(
     accumulated_main += "\n[INFO] Wan2.1 Text Encoder 输出预缓存已完成。\n"
     yield accumulated_main
 
-    wan_pre_cache_settings = {
+    # 保存 Wan2.1 预缓存设置（注意保存到 "wan_pre_caching" 以便后续加载）
+    wan_pre_caching_settings = {
         "wan_pre_caching": {
             "dataset_config_file": dataset_config_file,
             "dataset_config_text": dataset_config_text,
@@ -271,7 +272,7 @@ def run_wan_cache_commands(
         }
     }
     existing_settings = load_settings()
-    existing_settings.update(wan_pre_cache_settings)
+    existing_settings.update(wan_pre_caching_settings)
     save_settings(existing_settings)
 
 #########################
@@ -660,14 +661,16 @@ def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, 
 # 8. 构建 Gradio UI
 #########################
 
-# 注意：保留 toml 文件上传，其它模型文件及 prompt_file 上传改为用户手动输入或上传（prompt_file 可上传）
+# 注意：toml 文件上传功能保留，其它模型文件及 prompt_file.txt 上传由用户手动输入或上传（上传的 prompt_file.txt 会优先使用）
 settings = load_settings()
 pre_caching_settings = settings.get("pre_caching", {})
+# 新增：加载 Wan2.1 预缓存的设置
+wan_pre_caching_settings = settings.get("wan_pre_caching", {})
 training_settings = settings.get("training", {})
 wan_training_settings = settings.get("wan_training", {})
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Kohya's Musubi Tuner/ Gui built by ttplanet (中/英)")
+    gr.Markdown("# AI Software Musubi Tuner Gui (双语支持 中/英)")
 
     ########################################
     # (1) Pre-caching / 预缓存 页面
@@ -683,12 +686,12 @@ with gr.Blocks() as demo:
                 enable_low_memory = gr.Checkbox(label="启用低显存模式", value=pre_caching_settings.get("enable_low_memory", False))
                 skip_existing = gr.Checkbox(label="跳过已存在的 Cache 文件 (--skip_existing)", value=pre_caching_settings.get("skip_existing", False))
                 with gr.Row():
-                    vae_path = gr.Textbox(label="Hunyuan VAE 文件路径", placeholder="例如：K:/models/hunyuan/vae.pth")
-                    text_encoder1_path = gr.Textbox(label="Text Encoder 1 路径", placeholder="例如：K:/models/hunyuan/text_encoder1.pth")
-                    text_encoder2_path = gr.Textbox(label="Text Encoder 2 路径", placeholder="例如：K:/models/hunyuan/text_encoder2.pth")
+                    vae_path = gr.Textbox(label="Hunyuan VAE 文件路径", placeholder="例如：K:/models/hunyuan/vae.pth", value=pre_caching_settings.get("vae_path", ""))
+                    text_encoder1_path = gr.Textbox(label="Text Encoder 1 路径", placeholder="例如：K:/models/hunyuan/text_encoder1.pth", value=pre_caching_settings.get("text_encoder1_path", ""))
+                    text_encoder2_path = gr.Textbox(label="Text Encoder 2 路径", placeholder="例如：K:/models/hunyuan/text_encoder2.pth", value=pre_caching_settings.get("text_encoder2_path", ""))
                 with gr.Row():
-                    use_clip_checkbox = gr.Checkbox(label="使用 CLIP 模型 (--clip)", value=False)
-                    clip_model_path = gr.Textbox(label="Hunyuan CLIP 模型文件路径", placeholder="例如：K:/models/hunyuan/clip.pth", visible=False)
+                    use_clip_checkbox = gr.Checkbox(label="使用 CLIP 模型 (--clip)", value=pre_caching_settings.get("use_clip", False))
+                    clip_model_path = gr.Textbox(label="Hunyuan CLIP 模型文件路径", placeholder="例如：K:/models/hunyuan/clip.pth", visible=False, value=pre_caching_settings.get("clip_model_path", ""))
                 def toggle_clip_hunyuan(checked):
                     return gr.update(visible=checked)
                 use_clip_checkbox.change(toggle_clip_hunyuan, inputs=use_clip_checkbox, outputs=clip_model_path)
@@ -708,15 +711,15 @@ with gr.Blocks() as demo:
                 gr.Markdown("## Wan2.1 Latent 和 Text Encoder 输出预缓存（toml文件上传，其它文件路径手动输入）")
                 with gr.Row():
                     dataset_config_file_wan = gr.File(label="上传 dataset_config (toml)", file_count="single", file_types=[".toml"], type="filepath")
-                    dataset_config_text_wan = gr.Textbox(label="或手动输入 toml 路径", placeholder="例如：K:/ai_software/config.toml", value=wan_training_settings.get("dataset_config_text", ""))
-                enable_low_memory_wan = gr.Checkbox(label="启用低显存模式", value=wan_training_settings.get("enable_low_vram", False))
-                skip_existing_wan = gr.Checkbox(label="跳过已存在的 Cache 文件 (--skip_existing)", value=wan_training_settings.get("skip_existing", False))
+                    dataset_config_text_wan = gr.Textbox(label="或手动输入 toml 路径", placeholder="例如：K:/ai_software/config.toml", value=wan_pre_caching_settings.get("dataset_config_text", ""))
+                enable_low_memory_wan = gr.Checkbox(label="启用低显存模式", value=wan_pre_caching_settings.get("enable_low_memory", False))
+                skip_existing_wan = gr.Checkbox(label="跳过已存在的 Cache 文件 (--skip_existing)", value=wan_pre_caching_settings.get("skip_existing", False))
                 with gr.Row():
-                    vae_path_wan = gr.Textbox(label="Wan2.1 VAE 文件路径", placeholder="例如：K:/models/wan2.1/vae.safetensors")
-                    t5_path = gr.Textbox(label="T5 文件路径", placeholder="例如：K:/models/wan2.1/t5.pth")
+                    vae_path_wan = gr.Textbox(label="Wan2.1 VAE 文件路径", placeholder="例如：K:/models/wan2.1/vae.safetensors", value=wan_pre_caching_settings.get("vae_path", ""))
+                    t5_path = gr.Textbox(label="T5 文件路径", placeholder="例如：K:/models/wan2.1/t5.pth", value=wan_pre_caching_settings.get("t5_path", ""))
                 with gr.Row():
-                    use_clip_checkbox_wan = gr.Checkbox(label="使用 CLIP 模型 (--clip)", value=False)
-                    clip_model_path_wan = gr.Textbox(label="Wan2.1 CLIP 模型文件路径", placeholder="例如：K:/models/wan2.1/clip.pth", visible=False)
+                    use_clip_checkbox_wan = gr.Checkbox(label="使用 CLIP 模型 (--clip)", value=wan_pre_caching_settings.get("use_clip", False))
+                    clip_model_path_wan = gr.Textbox(label="Wan2.1 CLIP 模型文件路径", placeholder="例如：K:/models/wan2.1/clip.pth", visible=False, value=wan_pre_caching_settings.get("clip_model_path", ""))
                 def toggle_clip_wan(checked):
                     return gr.update(visible=checked)
                 use_clip_checkbox_wan.change(toggle_clip_wan, inputs=use_clip_checkbox_wan, outputs=clip_model_path_wan)
@@ -771,8 +774,8 @@ with gr.Blocks() as demo:
             sample_text_encoder1_path = gr.Textbox(label="Sample Text Encoder 1 路径", placeholder="例如：K:/models/hunyuan/text_encoder1_sample.pth")
             sample_text_encoder2_path = gr.Textbox(label="Sample Text Encoder 2 路径", placeholder="例如：K:/models/hunyuan/text_encoder2_sample.pth")
         with gr.Row():
-            use_clip_checkbox_train = gr.Checkbox(label="使用 CLIP 模型 (--clip) （用于 I2V）", value=False)
-            clip_model_path_train = gr.Textbox(label="Hunyuan CLIP 模型路径", placeholder="例如：K:/models/hunyuan/clip.pth", visible=False)
+            use_clip_checkbox_train = gr.Checkbox(label="使用 CLIP 模型 (--clip) （用于 I2V）", value=training_settings.get("use_clip", False))
+            clip_model_path_train = gr.Textbox(label="Hunyuan CLIP 模型路径", placeholder="例如：K:/models/hunyuan/clip.pth", visible=False, value=training_settings.get("clip_model_path", ""))
         def toggle_clip_train(checked):
             return gr.update(visible=checked)
         use_clip_checkbox_train.change(toggle_clip_train, inputs=use_clip_checkbox_train, outputs=clip_model_path_train)
@@ -791,7 +794,7 @@ with gr.Blocks() as demo:
             sample_steps_input = gr.Number(label="步数 (s)", value=training_settings.get("sample_steps", 20), precision=0, visible=training_settings.get("generate_samples", False))
         custom_prompt_txt_checkbox = gr.Checkbox(label="使用自定义 prompt_file (txt)？", value=training_settings.get("custom_prompt_txt", False), visible=training_settings.get("generate_samples", False))
         custom_prompt_path_input = gr.Textbox(label="自定义 prompt_file 路径", placeholder="请输入 prompt 文件路径", value=training_settings.get("custom_prompt_path", ""), visible=training_settings.get("generate_samples", False) and training_settings.get("custom_prompt_txt", False))
-        # 新增：上传 prompt_file.txt
+        # 增加上传 prompt_file.txt 的控件
         prompt_file_upload = gr.File(label="上传 prompt_file.txt（可选）", file_count="single", file_types=[".txt"], type="filepath")
         with gr.Row():
             run_train_button = gr.Button("运行训练")
@@ -812,7 +815,7 @@ with gr.Blocks() as demo:
                 sample_prompt_text_input, sample_w_input, sample_h_input,
                 sample_frames_input, sample_seed_input, sample_steps_input,
                 custom_prompt_txt_checkbox, custom_prompt_path_input,
-                prompt_file_upload,  # 新增上传的 prompt_file.txt
+                prompt_file_upload,
                 sample_vae_path, sample_text_encoder1_path, sample_text_encoder2_path
             ],
             outputs=train_output
@@ -875,7 +878,7 @@ with gr.Blocks() as demo:
             sample_steps_wan = gr.Number(label="步数 (s)", value=wan_training_settings.get("sample_steps", 20), precision=0, visible=wan_training_settings.get("generate_samples", False))
         custom_prompt_txt_checkbox_wan = gr.Checkbox(label="使用自定义 prompt_file (txt)？", value=wan_training_settings.get("custom_prompt_txt", False), visible=wan_training_settings.get("generate_samples", False))
         custom_prompt_path_wan = gr.Textbox(label="自定义 prompt_file 路径", placeholder="请输入 prompt 文件路径", value=wan_training_settings.get("custom_prompt_path", ""), visible=wan_training_settings.get("generate_samples", False) and wan_training_settings.get("custom_prompt_txt", False))
-        # 新增：上传 prompt_file.txt
+        # 增加上传 prompt_file.txt 的控件
         prompt_file_upload_wan = gr.File(label="上传 prompt_file.txt（可选）", file_count="single", file_types=[".txt"], type="filepath")
         with gr.Row():
             run_wan_train_button = gr.Button("运行 Wan2.1 训练")
@@ -896,7 +899,7 @@ with gr.Blocks() as demo:
                 sample_prompt_text_wan, sample_w_wan, sample_h_wan,
                 sample_frames_wan, sample_seed_wan, sample_steps_wan,
                 custom_prompt_txt_checkbox_wan, custom_prompt_path_wan,
-                prompt_file_upload_wan,  # 新增上传 prompt_file.txt
+                prompt_file_upload_wan,
                 # Wan2.1 采样时使用 VAE 与 T5 文件路径，由用户输入
                 gr.Textbox(label="VAE 文件路径 (--vae)", placeholder="例如：K:/models/wan2.1/vae.safetensors", value=wan_training_settings.get("sample_vae_path", "路径/to/wan_2.1_vae.safetensors")),
                 gr.Textbox(label="T5 模型路径 (--t5)", placeholder="例如：K:/models/wan2.1/t5.pth", value=wan_training_settings.get("sample_t5_path", "路径/to/models_t5_umt5-xxl-enc-bf16.pth"))
@@ -910,7 +913,6 @@ with gr.Blocks() as demo:
     ########################################
     with gr.Tab("LoRA Conversion / LoRA 转换"):
         gr.Markdown("## 将 LoRA 转换为其他格式 (target=other)")
-        # LoRA 文件依然采用上传方式
         lora_file_path = gr.File(label="选择 Musubi LoRA 文件 (.safetensors)，仅获取路径", file_count="single", file_types=[".safetensors"], type="filepath")
         output_dir_conversion = gr.Textbox(label="输出目录 (可选)", placeholder="例如：K:/converted_output", value="")
         convert_button = gr.Button("Convert LoRA / 转换 LoRA")
