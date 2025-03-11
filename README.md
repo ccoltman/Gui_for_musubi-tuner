@@ -1,5 +1,7 @@
 # Gui_for_musubi-tuner
 
+core from https://github.com/kohya-ss/musubi-tuner
+
 A user-friendly GUI for the **Kohya_ss musubi-tuner**, designed for easy use!
 
 ## Requirements:
