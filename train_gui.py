@@ -670,7 +670,7 @@ training_settings = settings.get("training", {})
 wan_training_settings = settings.get("wan_training", {})
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Kohya's Musubi Tuner/ Gui built by TTPlanet with AI")
+    gr.Markdown("# Kohya's Musubi Tuner/ Gui done by TTPlanet&ChatGPT (双语支持 中/英)")
 
     ########################################
     # (1) Pre-caching / 预缓存 页面
@@ -768,11 +768,11 @@ with gr.Blocks() as demo:
             return gr.update(visible=checked)
         use_network_weights.change(toggle_network_weights_input, inputs=use_network_weights, outputs=network_weights_path)
         with gr.Row():
-            dit_weights_path = gr.Textbox(label="Hunyuan Dit 权重文件路径", placeholder="例如：K:/models/hunyuan/dit.pth")
+            dit_weights_path = gr.Textbox(label="Hunyuan Dit 权重文件路径", placeholder="例如：K:/models/hunyuan/dit.pth", value=training_settings.get("dit_weights_path", ""))
         with gr.Row():
-            sample_vae_path = gr.Textbox(label="Hunyuan Sample VAE 文件路径", placeholder="例如：K:/models/hunyuan/vae_sample.pth")
-            sample_text_encoder1_path = gr.Textbox(label="Sample Text Encoder 1 路径", placeholder="例如：K:/models/hunyuan/text_encoder1_sample.pth")
-            sample_text_encoder2_path = gr.Textbox(label="Sample Text Encoder 2 路径", placeholder="例如：K:/models/hunyuan/text_encoder2_sample.pth")
+            sample_vae_path = gr.Textbox(label="Hunyuan Sample VAE 文件路径", placeholder="例如：K:/models/hunyuan/vae_sample.pth", value=training_settings.get("sample_vae_path", ""))
+            sample_text_encoder1_path = gr.Textbox(label="Sample Text Encoder 1 路径", placeholder="例如：K:/models/hunyuan/text_encoder1_sample.pth", value=training_settings.get("sample_text_encoder1_path", ""))
+            sample_text_encoder2_path = gr.Textbox(label="Sample Text Encoder 2 路径", placeholder="例如：K:/models/hunyuan/text_encoder2_sample.pth", value=training_settings.get("sample_text_encoder2_path", ""))
         with gr.Row():
             use_clip_checkbox_train = gr.Checkbox(label="使用 CLIP 模型 (--clip) （用于 I2V）", value=training_settings.get("use_clip", False))
             clip_model_path_train = gr.Textbox(label="Hunyuan CLIP 模型路径", placeholder="例如：K:/models/hunyuan/clip.pth", visible=False, value=training_settings.get("clip_model_path", ""))
