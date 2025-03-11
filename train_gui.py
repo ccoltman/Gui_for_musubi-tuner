@@ -670,7 +670,7 @@ training_settings = settings.get("training", {})
 wan_training_settings = settings.get("wan_training", {})
 
 with gr.Blocks() as demo:
-    gr.Markdown("# AI Software Musubi Tuner Gui (双语支持 中/英)")
+    gr.Markdown("# Kohya's Musubi Tuner/ Gui built by TTPlanet with AI")
 
     ########################################
     # (1) Pre-caching / 预缓存 页面
