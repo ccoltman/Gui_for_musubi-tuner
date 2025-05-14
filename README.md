@@ -12,3 +12,5 @@ A user-friendly GUI for the **Kohya_ss musubi-tuner**, designed for easy use!
 ## Setup:
 1. Navigate to the **musubi-tuner** folder.
 2. Run the launch.bat file to update libraries and launch the server.
+
+I have compiled Flash Attention 2.7.4post1 and hosted it to make the installation easier.
