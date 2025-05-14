@@ -5,19 +5,20 @@ import os
 import signal
 import psutil
 from typing import Generator
-import toml  # 用于保存和加载设置
+import toml  # For saving and loading settings 用于保存和加载设置
 
 #########################
-# 1. 全局进程管理
+# 1. Global process management 全局进程管理
 #########################
 
 running_processes = {
-    "cache": None,   # 预缓存进程
-    "train": None    # 训练进程
+    "cache": None,   # precaching process 预缓存进程
+    "train": None    # training process 训练进程
 }
 
 def terminate_process_tree(proc: subprocess.Popen):
     """
+    Recursively terminate the specified process and all its child processes, suitable for accelerator or multi-process scenarios.
     递归终止指定进程及其所有子进程，适用于加速器或多进程场景。
     """
     if proc is None:
@@ -37,6 +38,7 @@ def terminate_process_tree(proc: subprocess.Popen):
 
 def stop_caching():
     """
+    Stop the currently running precache subprocess.
     停止当前正在运行的预缓存子进程。
     """
     if running_processes["cache"] is not None:
@@ -44,11 +46,11 @@ def stop_caching():
         if proc.poll() is None:
             terminate_process_tree(proc)
             running_processes["cache"] = None
-            return "[INFO] 已请求停止预缓存进程（杀掉所有子进程）。\n"
+            return "[INFO] A request has been made to stop the precaching process (kill all child processes). 已请求停止预缓存进程（杀掉所有子进程）。\n"
         else:
-            return "[WARN] 预缓存进程已经结束，无需停止。\n"
+            return "[WARN] The precaching process has ended and does not need to be stopped. 预缓存进程已经结束，无需停止。\n"
     else:
-        return "[WARN] 当前没有正在进行的预缓存进程。\n"
+        return "[WARN] There is currently no precaching process in progress. 当前没有正在进行的预缓存进程。\n"
 
 def stop_training():
     """
@@ -59,14 +61,14 @@ def stop_training():
         if proc.poll() is None:
             terminate_process_tree(proc)
             running_processes["train"] = None
-            return "[INFO] 已请求停止训练进程（杀掉所有子进程）。\n"
+            return "[INFO] Requested to stop the training process (kill all child processes). 已请求停止训练进程（杀掉所有子进程）。\n"
         else:
-            return "[WARN] 训练进程已经结束，无需停止。\n"
+            return "[WARN] The training process has finished and there is no need to stop it. 训练进程已经结束，无需停止。\n"
     else:
-        return "[WARN] 当前没有正在进行的训练进程。\n"
+        return "[WARN] There is currently no training process in progress. 当前没有正在进行的训练进程。\n"
 
 #########################
-# 2. 设置保存与加载
+# 2. Save and load settings 设置保存与加载
 #########################
 
 SETTINGS_FILE = "settings.toml"
@@ -87,14 +89,14 @@ def save_settings(settings: dict):
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             toml.dump(settings, f)
     except Exception as e:
-        print(f"[WARN] 保存 settings.toml 失败: {e}")
+        print(f"[WARN] save settings.toml fail: {e}")
 
 #########################
-# 3. 处理输入数据集配置路径
+# 3. Processing input dataset configuration path 处理输入数据集配置路径
 #########################
 
 def get_dataset_config(file_path: str, text_path: str) -> str:
-    # 对于 toml 文件，优先使用上传文件的路径
+    # For toml files, the path of the uploaded file is preferred
     if file_path and os.path.isfile(file_path):
         return file_path
     elif text_path.strip():
@@ -106,7 +108,7 @@ def get_dataset_config(file_path: str, text_path: str) -> str:
 # 4. Pre-caching
 #########################
 
-# Hunyuan 预缓存：toml 文件上传，其它模型文件路径由用户手动输入
+# Hunyuan Pre-caching: toml file upload, other model file paths are manually entered by the user
 def run_cache_commands(
     dataset_config_file: str,
     dataset_config_text: str,
@@ -149,7 +151,7 @@ def run_cache_commands(
 
     def run_and_stream_output(cmd):
         accumulated = ""
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         running_processes["cache"] = process
         for line in process.stdout:
             print(line, end="", flush=True)
@@ -194,7 +196,7 @@ def run_cache_commands(
     existing_settings.update(pre_caching_settings)
     save_settings(existing_settings)
 
-# Wan2.1 预缓存：toml 文件上传，其它模型文件路径由用户手动输入
+# Wan2.1 Pre-caching: toml file upload, other model file paths are manually entered by the user 预缓存：toml 文件上传，其它模型文件路径由用户手动输入
 def run_wan_cache_commands(
     dataset_config_file: str,
     dataset_config_text: str,
@@ -231,7 +233,7 @@ def run_wan_cache_commands(
 
     def run_and_stream_output(cmd):
         accumulated = ""
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         running_processes["cache"] = process
         for line in process.stdout:
             print(line, end="", flush=True)
@@ -275,7 +277,7 @@ def run_wan_cache_commands(
     existing_settings.update(wan_pre_caching_settings)
     save_settings(existing_settings)
 
-# FramePack 预缓存：toml 文件上传，其它模型文件路径由用户手动输入
+# FramePack Pre-caching: toml file upload, other model file paths are manually entered by the user 预缓存：toml 文件上传，其它模型文件路径由用户手动输入
 def run_fpack_cache_commands(
     dataset_config_file: str,
     dataset_config_text: str,
@@ -322,7 +324,7 @@ def run_fpack_cache_commands(
 
     def run_and_stream_output(cmd):
         accumulated = ""
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         running_processes["cache"] = process
         for line in process.stdout:
             print(line, end="", flush=True)
@@ -370,7 +372,7 @@ def run_fpack_cache_commands(
     save_settings(existing_settings)
 
 #########################
-# 5. Hunyuan 训练函数
+# 5. Hunyuan training function 训练函数
 #########################
 
 def make_prompt_file(
@@ -540,7 +542,7 @@ def run_training(
 
     def run_and_stream_output(cmd):
         accumulated = ""
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         running_processes["train"] = process
         for line in process.stdout:
             print(line, end="", flush=True)
@@ -560,7 +562,7 @@ def run_training(
     yield "\n[INFO] 训练命令执行完成。\n"
 
 #########################
-# 6. Wan2.1 训练函数
+# 6. Wan2.1 training function 训练函数
 #########################
 
 def run_wan_training(
@@ -595,7 +597,8 @@ def run_wan_training(
     custom_prompt_path: str,
     prompt_file_upload: str,
     sample_vae_path: str,
-    sample_t5_path: str
+    sample_t5_path: str,
+    attn_format: str
 ) -> Generator[str, None, None]:
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
     python_executable = "./python_embeded/python.exe"
@@ -604,13 +607,12 @@ def run_wan_training(
         python_executable, "-m", "accelerate.commands.launch",
         "--num_cpu_threads_per_process", "1",
         "--mixed_precision", "bf16",
-        # "--num_processes", "1",     # 只使用一个进程
-        "--gpu_ids", "0",           # 只使用第一张GPU
+        # "--num_processes", "1",     # Use only one process 只使用一个进程
+        "--gpu_ids", "0",           # Only use the first GPU 只使用第一张GPU
         "wan_train_network.py",
         "--task", task,
         "--dit", dit_weights_path,
         "--dataset_config", dataset_config,
-        "--sdpa",
         "--mixed_precision", "bf16",
         "--fp8_base",
         "--optimizer_type", "adamw8bit",
@@ -634,6 +636,15 @@ def run_wan_training(
         command.extend(["--network_weights", network_weights_path.strip()])
     if use_clip and clip_model_path.strip():
         command.extend(["--clip", clip_model_path.strip()])
+    if attn_format:
+        if attn_format == "SDPA (default)":
+            command.extend(["--sdpa"])
+        elif attn_format == "Flash Attention":
+            command.extend(["--flash_attn"])
+        elif attn_format == "XFormers":
+            command.extend(["--split_attn", "--xformers"])
+        elif attn_format == "Sage Attention":
+            command.extend(["--sage_attn"])   
     if generate_samples:
         prompt_file_final = make_prompt_file(
             prompt_text=sample_prompt_text,
@@ -655,7 +666,6 @@ def run_wan_training(
             "--t5", sample_t5_path,
             "--fp8_llm"
         ])
-
     current_settings = {
         "wan_training": {
             "dataset_config_file": dataset_config_file,
@@ -689,7 +699,8 @@ def run_wan_training(
             "custom_prompt_path": custom_prompt_path,
             "prompt_file_upload": prompt_file_upload,
             "sample_vae_path": sample_vae_path,
-            "sample_t5_path": sample_t5_path
+            "sample_t5_path": sample_t5_path,
+            "attn_format": attn_format
         }
     }
     existing_settings = load_settings()
@@ -698,7 +709,7 @@ def run_wan_training(
 
     def run_and_stream_output(cmd):
         accumulated = ""
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         running_processes["train"] = process
         for line in process.stdout:
             print(line, end="", flush=True)
@@ -707,18 +718,18 @@ def run_wan_training(
         return_code = process.wait()
         running_processes["train"] = None
         if return_code != 0:
-            error_msg = f"\n[ERROR] 命令执行失败，返回码: {return_code}\n"
+            error_msg = f"\n[ERROR]: {return_code}\n"
             accumulated += error_msg
             yield accumulated
 
-    start_message = "[INFO] 开始运行 Wan2.1 训练命令...\n\n"
+    start_message = "[INFO]  Wan2.1 ...\n\n"
     yield start_message
     for content in run_and_stream_output(command):
         yield content
-    yield "\n[INFO] Wan2.1 训练命令执行完成。\n"
+    yield "\n[INFO] Wan2.1 \n"
 
 #########################
-# 7. FramePack 训练函数
+# 7. FramePack 
 #########################
 
 def run_fpack_training(
@@ -861,7 +872,7 @@ def run_fpack_training(
 
     def run_and_stream_output(cmd):
         accumulated = ""
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         running_processes["train"] = process
         for line in process.stdout:
             print(line, end="", flush=True)
@@ -903,7 +914,7 @@ def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, 
         "--target", "other"
     ]
     accumulated = ""
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
     for line in process.stdout:
         print(line, end="", flush=True)
         accumulated += line
@@ -1177,6 +1188,8 @@ with gr.Blocks() as demo:
             sample_steps_wan = gr.Number(label="Steps (s) / 步数", value=wan_training_settings.get("sample_steps", 20), precision=0, visible=wan_training_settings.get("generate_samples", False))
         custom_prompt_txt_checkbox_wan = gr.Checkbox(label="Use Custom Prompt File? / 使用自定义提示文件?", value=wan_training_settings.get("custom_prompt_txt", False), visible=wan_training_settings.get("generate_samples", False))
         custom_prompt_path_wan = gr.Textbox(label="Custom Prompt File Path / 自定义提示文件路径", placeholder="Input prompt file path / 请输入提示文件路径", value=wan_training_settings.get("custom_prompt_path", ""), visible=wan_training_settings.get("generate_samples", False) and wan_training_settings.get("custom_prompt_txt", False))
+        with gr.Row():
+            attn_format = gr.Radio(label="Attention Format / 注意力格式", choices=["SDPA (default)", "Flash Attention", "XFormers", "Sage Attention"], value="SDPA (default)") # Set the default value
         # 增加上传 prompt_file.txt 的控件
         prompt_file_upload_wan = gr.File(label="Upload prompt_file.txt (Optional) / 上传提示文件(可选)", file_count="single", file_types=[".txt"], type="filepath")
         with gr.Row():
@@ -1201,7 +1214,8 @@ with gr.Blocks() as demo:
                 prompt_file_upload_wan,
                 # Wan2.1 采样时使用 VAE 与 T5 文件路径，由用户输入
                 gr.Textbox(label="VAE 文件路径 (--vae)", placeholder="例如：K:/models/wan2.1/vae.safetensors", value=wan_training_settings.get("sample_vae_path", "路径/to/wan_2.1_vae.safetensors")),
-                gr.Textbox(label="T5 模型路径 (--t5)", placeholder="例如：K:/models/wan2.1/t5.pth", value=wan_training_settings.get("sample_t5_path", "路径/to/models_t5_umt5-xxl-enc-bf16.pth"))
+                gr.Textbox(label="T5 模型路径 (--t5)", placeholder="例如：K:/models/wan2.1/t5.pth", value=wan_training_settings.get("sample_t5_path", "路径/to/models_t5_umt5-xxl-enc-bf16.pth")),
+                attn_format  # Include the new radio button here
             ],
             outputs=wan_train_output
         )
