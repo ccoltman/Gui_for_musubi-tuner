@@ -627,10 +627,13 @@ def run_wan_training(
         "--output_dir", output_dir,
         "--output_name", output_name
     ]
-    if max_workers_input:
-        command.extend(["--max_data_loader_n_workers", str(max_workers_input)])
     if persistent_workers_checkbox:
-        command.append("--persistent_data_loader_workers")
+        if max_workers_input > 0:
+            command.extend(["--max_data_loader_n_workers", str(max_workers_input)])
+            command.append("--persistent_data_loader_workers")
+        else:
+            # Do not include any options for persistent workers or max workers
+            pass
     if enable_low_vram:
         command.extend(["--blocks_to_swap", str(blocks_to_swap)])
     if use_network_weights and network_weights_path.strip():
@@ -710,6 +713,7 @@ def run_wan_training(
 
     def run_and_stream_output(cmd):
         accumulated = ""
+        print("[INFO] Command issued for training:", " ".join(cmd))
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         running_processes["train"] = process
         for line in process.stdout:
@@ -1155,8 +1159,12 @@ with gr.Blocks() as demo:
             enable_low_vram_wan = gr.Checkbox(label="Enable Low VRAM Mode / 启用低显存模式", value=wan_training_settings.get("enable_low_vram", False))
             blocks_to_swap_wan = gr.Number(label="Blocks to Swap (20-36, even) / 交换块数(20-36，双数)", value=wan_training_settings.get("blocks_to_swap", 20), precision=0, visible=wan_training_settings.get("enable_low_vram", False))
         with gr.Row():
-            max_workers_input = gr.Number(label="Max Data Loader Workers",value=wan_training_settings.get("max_data_loader_n_workers", 2),precision=0)
-            persistent_workers_checkbox = gr.Checkbox(label="Enable Persistent Workers",value=wan_training_settings.get("persistent_data_loader_workers", True))
+            persistent_workers_checkbox = gr.Checkbox(label="Enable Persistent Workers / 启用持久工作者",value=wan_training_settings.get("persistent_data_loader_workers", False))
+            max_workers_input = gr.Number(label="Max Data Loader Workers / 最大数据加载器工作数",value=wan_training_settings.get("max_data_loader_n_workers", 2),precision=0,visible=False)
+        # Update visibility of max_workers_input based on persistent_workers_checkbox
+        def toggle_max_workers_visibility(is_checked):
+            return gr.update(visible=is_checked)
+        persistent_workers_checkbox.change(toggle_max_workers_visibility, inputs=persistent_workers_checkbox, outputs=max_workers_input)
         def toggle_blocks_swap_wan(checked):
             return gr.update(visible=checked)
         enable_low_vram_wan.change(toggle_blocks_swap_wan, inputs=enable_low_vram_wan, outputs=blocks_to_swap_wan)
@@ -1220,7 +1228,7 @@ with gr.Blocks() as demo:
                 gr.Textbox(label="VAE 文件路径 (--vae)", placeholder="例如：K:/models/wan2.1/vae.safetensors", value=wan_training_settings.get("sample_vae_path", "路径/to/wan_2.1_vae.safetensors")),
                 gr.Textbox(label="T5 模型路径 (--t5)", placeholder="例如：K:/models/wan2.1/t5.pth", value=wan_training_settings.get("sample_t5_path", "路径/to/models_t5_umt5-xxl-enc-bf16.pth")),
                 attn_format,
-                max_workers_input, persistent_workers_checkbox
+                persistent_workers_checkbox, max_workers_input
             ],
             outputs=wan_train_output
         )
