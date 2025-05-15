@@ -208,7 +208,7 @@ def run_wan_cache_commands(
     t5_path: str
 ) -> Generator[str, None, None]:
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
-    python_executable = "./python_embeded/python.exe"
+    python_executable = "python.exe"
 
     cache_latents_cmd = [
         python_executable, "wan_cache_latents.py",
@@ -438,7 +438,7 @@ def run_training(
     sample_text_encoder2_path: str
 ) -> Generator[str, None, None]:
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
-    python_executable = "./python_embeded/python.exe"
+    python_executable = "python.exe"
 
     command = [
         python_executable, "-m", "accelerate.commands.launch",
@@ -598,10 +598,12 @@ def run_wan_training(
     prompt_file_upload: str,
     sample_vae_path: str,
     sample_t5_path: str,
-    attn_format: str
+    attn_format: str,
+    max_data_loader_n_workers: int,
+    persistent_data_loader_workers: bool
 ) -> Generator[str, None, None]:
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
-    python_executable = "./python_embeded/python.exe"
+    python_executable = "python.exe"
 
     command = [
         python_executable, "-m", "accelerate.commands.launch",
