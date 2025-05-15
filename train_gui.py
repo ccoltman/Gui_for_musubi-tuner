@@ -629,13 +629,11 @@ def run_wan_training(
         "--output_dir", output_dir,
         "--output_name", output_name
     ]
-    if persistent_workers_checkbox:
-        if max_workers_input > 0:
-            command.extend(["--max_data_loader_n_workers", str(max_workers_input)])
-            command.append("--persistent_data_loader_workers")
-        else:
-            # Do not include any options for persistent workers or max workers
-            pass
+    # Conditional: Persistent Workers and Max Workers
+    if persistent_data_loader_workers:
+        command.append("--persistent_data_loader_workers")
+        if max_data_loader_n_workers and int(max_data_loader_n_workers) > 0:
+            command.extend(["--max_data_loader_n_workers", str(int(max_data_loader_n_workers))])
     if enable_low_vram:
         command.extend(["--blocks_to_swap", str(blocks_to_swap)])
     if use_network_weights and network_weights_path.strip():
