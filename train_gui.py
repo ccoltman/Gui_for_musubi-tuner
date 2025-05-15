@@ -607,10 +607,10 @@ def run_wan_training(
 
     command = [
         python_executable, "-m", "accelerate.commands.launch",
-        "wan_train_network.py",
         "--num_cpu_threads_per_process", "1",
         # "--num_processes", "1",     # Use only one process 只使用一个进程
         "--gpu_ids", "0",           # Only use the first GPU 只使用第一张GPU
+        "wan_train_network.py",
         "--task", task,
         "--dit", dit_weights_path,
         "--dataset_config", dataset_config,
