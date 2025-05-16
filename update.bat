@@ -1,4 +1,6 @@
 call .\venv\Scripts\Activate
+git pull
+git --git-dir .\Gui_for_musubi-tuner\.git --work-tree .\ pull origin main
 pip install easydict ftfy opencv-python av diffusers voluptuous gradio typing-extensions
 pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip install -U accelerate bitsandbytes xformers
