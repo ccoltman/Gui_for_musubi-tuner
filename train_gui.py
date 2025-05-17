@@ -121,7 +121,7 @@ def run_cache_commands(
     text_encoder2_path: str
 ) -> Generator[str, None, None]:
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
-    python_executable = "./python_embeded/python.exe"
+    python_executable = "venv\Scripts\python.exe"
 
     # Latent 预缓存命令（--clip 参数仅添加到此处）
     cache_latents_cmd = [
@@ -292,7 +292,7 @@ def run_fpack_cache_commands(
     text_encoder2_path: str
 ) -> Generator[str, None, None]:
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
-    python_executable = "./python_embeded/python.exe"
+    python_executable = "venv\Scripts\python.exe"
 
     # Latent 预缓存命令
     cache_latents_cmd = [
@@ -772,7 +772,7 @@ def run_fpack_training(
     split_attn: bool,
 ) -> Generator[str, None, None]:
     dataset_config = get_dataset_config(dataset_config_file, dataset_config_text)
-    python_executable = "./python_embeded/python.exe"
+    python_executable = "venv\Scripts\python.exe"
 
     command = [
         python_executable, "-m", "accelerate.commands.launch",
@@ -904,7 +904,7 @@ def run_lora_conversion(lora_file_path: str, output_dir: str) -> Generator[str, 
     if not lora_file_path.strip() or not os.path.isfile(lora_file_path.strip()):
         yield "[ERROR] 未选择有效的 LoRA 文件路径\n"
         return
-    python_executable = "./python_embeded/python.exe"
+    python_executable = "venv\Scripts\python.exe"
     in_path = lora_file_path.strip()
     basename = os.path.basename(in_path)
     filename_no_ext, ext = os.path.splitext(basename)
